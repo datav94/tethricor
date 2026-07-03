@@ -1,0 +1,19 @@
+# LOCAL TEST harness image (NOT for production).
+#
+# This packages ONLY the Tethricor execution shim so the full local stack can run offline
+# and demonstrate the code-IN / code-OUT flow. It intentionally omits a real harness
+# binary and does not apply the production hardening (non-root, read-only rootfs) found
+# in the docker/Dockerfile.*-hardened images — those are the ones deployed for real.
+#
+# Build context is the repository root (so it can copy the shim source).
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+COPY shim/ /opt/tethricor/shim/
+RUN pip install /opt/tethricor/shim
+
+# The shim forwards ALL execution to the agent-runtime; nothing runs locally here.
+ENTRYPOINT ["python", "-m", "tethricor_runtime"]

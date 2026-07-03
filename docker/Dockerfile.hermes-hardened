@@ -1,0 +1,37 @@
+# Hardened Hermes harness image (runtime profile: python312).
+#
+# Security posture (.cursorrules #1/#2/#3, IMPLEMENTATION_PLAN Phase 5):
+#   - non-root user, read-only-rootfs compatible (only /tmp is writable at runtime)
+#   - NO provider API keys baked in; LLM/MCP are routed through AgentGateway by the shim
+#   - ENTRYPOINT is the Tethricor exec shim, which forwards ALL execution to the agent-runtime;
+#     Hermes never runs code/bash/terminal locally in this container
+#   - Hermes-specific hardening (messaging gateway / cron / autonomous skill-creation
+#     disabled; sandbox backend forced to agent-runtime) is applied by the shim adapter
+FROM python:3.12-slim AS base
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+# Minimal OS deps; git is needed only if the harness inspects a local checkout.
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- harness install -------------------------------------------------------
+# Pin the Hermes agent version at build time (resolved from the platform image
+# manifest, not developer-overridable).
+ARG HERMES_VERSION=0.17.0
+RUN pip install "hermes-agent==${HERMES_VERSION}"
+
+# --- Tethricor exec shim --------------------------------------------------------
+COPY shim/ /opt/tethricor/shim/
+RUN pip install /opt/tethricor/shim
+
+# --- hardening -------------------------------------------------------------
+RUN useradd --uid 1001 --create-home --shell /usr/sbin/nologin tethricor
+USER 1001
+WORKDIR /home/tethricor
+
+# The shim is the only entrypoint. Task argv is forwarded to the agent-runtime.
+ENTRYPOINT ["python", "-m", "tethricor_runtime"]

@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tethricor"
+version = "0.1.0"
+description = "Tethricor core: the `tethricor` SDK + execution runtime that forwards all harness execution to a pluggable sandbox provider. No default backend -- choose one explicitly (remote-runtime, microsandbox, e2b, or your own)."
+license = { text = "Apache-2.0" }
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+requires-python = ">=3.10"
+dependencies = [
+    "httpx>=0.27",
+    "pyyaml>=6.0",
+]
+
+# Task-runner entrypoint (the sidecar CMD also uses `python -m tethricor_runtime`).
+# The primary developer command `tethricor` is provided by the tethricor-cli distribution.
+[project.scripts]
+tethricor-run = "tethricor.cli:main"
+
+[tool.setuptools]
+packages = ["tethricor_runtime", "tethricor"]

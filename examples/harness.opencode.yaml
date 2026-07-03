@@ -1,0 +1,29 @@
+# Example HarnessConfig — OpenCode (terminal coding agent, TS)
+apiVersion: tethricor.enterprise/v1
+kind: HarnessConfig
+
+harness:
+  type: opencode
+  version: latest
+
+model:
+  routing_profile: gpt-4o-standard
+
+skills:
+  - code-review
+
+mcp:
+  servers:
+    - default-tools
+
+runtime:
+  profile: node20             # opencode → node20 (default map)
+  timeout_seconds: 600
+  provider: remote-runtime    # explicit: no default sandbox provider (choose one)
+
+source:
+  repo_url: https://github.com/your-org/app.git
+  ref: main
+
+output:
+  mode: zip-download

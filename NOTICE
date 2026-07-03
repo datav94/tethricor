@@ -1,0 +1,31 @@
+Tethricor
+Copyright 2026 the Tethricor contributors
+
+Licensed under the Apache License, Version 2.0. See LICENSE for the full text.
+
+This distribution includes or depends on the following third-party open-source
+software. Their licenses are unaffected by, and independent of, Tethricor's own
+Apache-2.0 license.
+
+Runtime dependencies:
+  - FastAPI (MIT) — https://github.com/tiangolo/fastapi
+  - Typer (MIT) — https://github.com/tiangolo/typer
+  - Pydantic (MIT) — https://github.com/pydantic/pydantic
+  - jsonschema (MIT) — https://github.com/python-jsonschema/jsonschema
+  - PyYAML (MIT) — https://github.com/yaml/pyyaml
+  - httpx (BSD-3-Clause) — https://github.com/encode/httpx
+  - uvicorn (BSD-3-Clause) — https://github.com/encode/uvicorn
+
+Optional / adopted sandbox provider integrations (see providers/):
+  - microsandbox client integration targets microsandbox (Apache-2.0) —
+    https://github.com/microsandbox/microsandbox
+  - e2b client integration targets the e2b SDK (Apache-2.0) —
+    https://github.com/e2b-dev/E2B
+
+Evaluated and NOT adopted, for license/maintenance reasons (see
+docs/agent_context/FRAMEWORK_EVOLUTION.md §8): Daytona, Beam/beta9, and Arrakis are
+AGPL-3.0-licensed and are not bundled, vendored, or required by this project.
+
+If you add a new dependency, add its license here and confirm it is permissive
+(MIT/BSD/Apache-2.0) or otherwise cleared for use — see PRD.md §3a engineering
+principle 3 and `.cursorrules` #7.

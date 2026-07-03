@@ -1,0 +1,31 @@
+# Example HarnessConfig — Hermes (self-improving general agent, Python)
+# Hardened image disables Hermes messaging gateway, autonomous skill-creation, and cron.
+apiVersion: tethricor.enterprise/v1
+kind: HarnessConfig
+
+harness:
+  type: hermes
+  version: "0.17.0"
+
+model:
+  routing_profile: gpt-4o-standard
+
+skills:
+  - code-review
+  - jira
+
+mcp:
+  servers:
+    - default-tools
+
+runtime:
+  profile: python312          # hermes → python312 (default map)
+  timeout_seconds: 600
+  provider: remote-runtime    # explicit: no default sandbox provider (choose one)
+
+source:
+  repo_url: https://github.com/your-org/app.git
+  ref: main
+
+output:
+  mode: zip-download

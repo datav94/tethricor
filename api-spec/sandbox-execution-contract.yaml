@@ -1,0 +1,322 @@
+# Sandbox Execution Contract
+#
+# The contract every `SandboxProvider` implements: sessions -> async exec (202) -> SSE
+# events (stdout|stderr|exit|error) -> artifact download -> delete. The exec shim in the
+# hardened harness images forwards ALL code execution to a service implementing this
+# API (selected via `runtime.provider` / TETHRICOR_RUNTIME_URL); `local-dev/mock-sandbox.py`
+# implements it for local parity, and the `remote-runtime` provider is a generic REST/SSE
+# client against it -- point it at whatever backend you self-host or operate.
+#
+# The artifact download endpoint (used for code-OUT: a zip of changed files) is marked
+# `x-tethricor-addition: true` since it's not part of every minimal implementation of this
+# style of contract -- a backend you write must implement it for code-OUT to work.
+openapi: 3.0.3
+info:
+  title: Sandbox Runtime API (Tethricor sandbox execution contract)
+  version: 1.0.0
+  description: |
+    Control-plane API for short-lived agent sandboxes (sessions) and command execution
+    with SSE streaming.
+
+    Illustrative backend flavors a real implementation might offer (this is describing
+    the shape of the problem, not something this repo ships): an in-process/non-isolated
+    mode for tests and demos (NEVER use for non-local paths), one container per session
+    via a local container runtime, or a cloud-managed sandbox-per-session service. Any of
+    these are valid as long as they implement this contract.
+
+    Tethricor usage: create a session (cloning `source.repo_url`), start an async exec, stream
+    events over SSE, retrieve the changed-files zip via the artifact endpoint, then
+    delete the session. One session per task.
+servers:
+  - url: http://localhost:8080
+    description: Local
+tags:
+  - name: Health
+  - name: Sessions
+  - name: Discovery
+  - name: Artifacts
+paths:
+  /healthz:
+    get:
+      tags: [Health]
+      summary: Liveness probe
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /v1/profiles:
+    get:
+      tags: [Discovery]
+      summary: List supported sandbox profiles
+      description: |
+        Valid values for `harness.yaml` `runtime.profile`. The set may be extended at
+        deploy time via `AGENT_RUNTIME_PROFILE_IMAGES`.
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  profiles:
+                    type: array
+                    items:
+                      type: string
+  /v1/sessions:
+    post:
+      tags: [Sessions]
+      summary: Create a sandbox session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateSessionRequest"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "400":
+          $ref: "#/components/responses/Error"
+  /v1/sessions/{sessionID}:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    get:
+      tags: [Sessions]
+      summary: Get session metadata
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Session"
+        "404":
+          $ref: "#/components/responses/Error"
+        "410":
+          $ref: "#/components/responses/Error"
+    delete:
+      tags: [Sessions]
+      summary: Delete session and reclaim resources
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          $ref: "#/components/responses/Error"
+  /v1/sessions/{sessionID}/exec:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+    post:
+      tags: [Sessions]
+      summary: Start a command in the session (async)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ExecRequest"
+      responses:
+        "202":
+          description: Accepted
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ExecRecord"
+        "400":
+          $ref: "#/components/responses/Error"
+        "404":
+          $ref: "#/components/responses/Error"
+        "410":
+          $ref: "#/components/responses/Error"
+        "501":
+          $ref: "#/components/responses/Error"
+  /v1/sessions/{sessionID}/exec/{execID}/events:
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - $ref: "#/components/parameters/ExecID"
+    get:
+      tags: [Sessions]
+      summary: Stream exec output (Server-Sent Events)
+      description: |
+        Each event is a JSON object prefixed with `data: ` and terminated with a blank
+        line, per the SSE spec. Event `type` is one of `stdout`, `stderr`, `exit`,
+        `error`. The stream terminates after the `exit` event (which carries `code`).
+
+        NOTE: output is line-oriented and lossy (whitespace trimmed, empty lines
+        dropped, not binary-safe). Binary/byte-exact payloads (e.g. the changed-files
+        zip) MUST use the artifact endpoint, not this stream.
+      responses:
+        "200":
+          description: SSE stream
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                example: |
+                  data: {"type":"stdout","data":"hello"}
+
+                  data: {"type":"exit","code":0}
+        "404":
+          $ref: "#/components/responses/Error"
+  /v1/sessions/{sessionID}/artifacts/{name}:
+    x-tethricor-addition: true
+    parameters:
+      - $ref: "#/components/parameters/SessionID"
+      - name: name
+        in: path
+        required: true
+        schema:
+          type: string
+        description: Artifact name, e.g. `changes.zip`.
+    get:
+      tags: [Artifacts]
+      summary: Download a session artifact (code-OUT — Tethricor addition)
+      description: |
+        Returns a binary artifact produced inside the session (primary code-OUT path:
+        the zip of changed files built by the adapter output profile via
+        `git diff`/`git status`). Binary-safe, unlike the SSE stream.
+
+        Upstream dependency: not yet implemented in the agent-runtime. Fallback until it
+        lands: base64-zip over the SSE stdout channel (`output.mode: stdout-changed-files`).
+      responses:
+        "200":
+          description: Artifact bytes
+          content:
+            application/zip:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/Error"
+        "410":
+          $ref: "#/components/responses/Error"
+components:
+  parameters:
+    SessionID:
+      name: sessionID
+      in: path
+      required: true
+      schema:
+        type: string
+    ExecID:
+      name: execID
+      in: path
+      required: true
+      schema:
+        type: string
+  responses:
+    Error:
+      description: Error
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+  schemas:
+    ErrorResponse:
+      type: object
+      description: |
+        Status mapping: 400 invalid_input, 404 not_found, 410 session_expired,
+        501 not_supported, 500 internal.
+      properties:
+        error:
+          type: object
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+    CreateSessionRequest:
+      type: object
+      required: [profile]
+      properties:
+        profile:
+          type: string
+          description: Sandbox profile (maps to an image); see GET /v1/profiles.
+        ttlSeconds:
+          type: integer
+          minimum: 1
+        repoUrl:
+          type: string
+          description: |
+            Git repo to clone into the session at create time (Tethricor code-IN). Reserved
+            in the current agent-runtime build; implementation is a Phase 0 upstream
+            dependency.
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+        profile:
+          type: string
+        state:
+          type: string
+          enum: [pending, running, failed, stopped]
+        createdAt:
+          type: string
+          format: date-time
+        expiresAt:
+          type: string
+          format: date-time
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+    ExecRequest:
+      type: object
+      required: [argv]
+      description: |
+        `argv` is executed directly (no shell unless argv[0] is a shell). There is no
+        `stdin` and no cancel/kill; cancellation is `timeoutSec` or session delete.
+      properties:
+        argv:
+          type: array
+          items:
+            type: string
+        cwd:
+          type: string
+        env:
+          type: object
+          additionalProperties:
+            type: string
+        timeoutSec:
+          type: integer
+          minimum: 1
+    ExecRecord:
+      type: object
+      properties:
+        id:
+          type: string
+        sessionId:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+        exitCode:
+          type: integer
+          nullable: true
+    ExecEvent:
+      type: object
+      description: One SSE frame from the exec events stream.
+      properties:
+        type:
+          type: string
+          enum: [stdout, stderr, exit, error]
+        data:
+          type: string
+        code:
+          type: integer

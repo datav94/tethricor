@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tethricor.enterprise/schemas/harness-config-schema.json",
+  "title": "Tethricor HarnessConfig (harness.yaml)",
+  "description": "Contract for a Tethricor configuration. The developer declares intent; the platform enforces security. Deployment target, egress/security, workload identity, and hardened image resolution are platform-injected and MUST NOT appear here (they are set by the CLI/webhook, not the developer).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "harness", "model", "runtime", "source"],
+  "properties": {
+    "apiVersion": {
+      "type": "string",
+      "const": "tethricor.enterprise/v1",
+      "description": "Versioned contract identifier."
+    },
+    "kind": {
+      "type": "string",
+      "const": "HarnessConfig"
+    },
+    "harness": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "version"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "minLength": 1,
+          "description": "A harness adapter name. Built-in adapters: hermes, pi, feynman, openhands, goose, opencode (`pi` and `feynman` share the Pi adapter). Not a closed set: any name registered as a HarnessAdapter (via the tethricor.harnesses entry point, or tethricor_runtime.adapters.register_harness) is also valid. Validated at generation/run time against the installed adapter registry, not statically here, so third-party harness plugins don't require a schema change."
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Requested harness version. Resolved to a platform-controlled hardened image tag via the image manifest (developers cannot override the image itself)."
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routing_profile"],
+      "properties": {
+        "routing_profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "v1 abstraction: an alias understood by the AgentGateway router. NOT provider credentials. Migrates to gateway model aliases in a later version."
+        },
+        "direct_azure_openai": {
+          "type": "object",
+          "description": "LOCAL TESTING ONLY escape hatch used when AgentGateway is unavailable locally. The CLI MUST strip/reject this for any non-local --target.",
+          "additionalProperties": false,
+          "required": ["endpoint", "deployment"],
+          "properties": {
+            "endpoint": {
+              "type": "string",
+              "format": "uri",
+              "description": "Azure OpenAI resource endpoint, e.g. https://<resource>.openai.azure.com"
+            },
+            "deployment": {
+              "type": "string",
+              "minLength": 1,
+              "description": "Azure OpenAI deployment name."
+            },
+            "api_version": {
+              "type": "string",
+              "description": "Optional Azure OpenAI API version."
+            }
+          }
+        }
+      }
+    },
+    "skills": {
+      "type": "array",
+      "description": "v1: free-form list of skill references (opaque strings). A future version will validate these against the live enterprise catalog.",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": []
+    },
+    "mcp": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "MCP servers to attach, reached through AgentGateway.",
+      "properties": {
+        "servers": {
+          "type": "array",
+          "description": "v1: free-form catalog references (opaque strings), not URLs.",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        }
+      }
+    },
+    "runtime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile"],
+      "description": "Execution forwarding target (the agent-runtime session).",
+      "properties": {
+        "profile": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Agent-runtime sandbox profile. MUST be one of the values returned by the runtime's GET /v1/profiles (validated at generation time, not statically, because AGENT_RUNTIME_PROFILE_IMAGES can extend the set). Known values include: minimal, skills-minimal, git, node20, skill-security-runner, python312, rust, go, polyglot-dev.",
+          "examples": ["python312", "node20", "rust", "polyglot-dev"]
+        },
+        "timeout_seconds": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Per-task execution timeout hint forwarded to the runtime.",
+          "default": 600
+        },
+        "provider": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Sandbox provider name (plug-and-play backend). No implied default — choose explicitly (e.g. `remote-runtime` for any service implementing the sandbox execution contract, or an installed OSS provider like `microsandbox`/`e2b`). Validated at generation/run time against the installed provider registry (tethricor.discovery), not statically, because provider packages register via entry points.",
+          "examples": ["remote-runtime", "microsandbox", "e2b"]
+        }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repo_url"],
+      "description": "Code IN: the repo cloned into the runtime session at create time (read-only clone token injected by the platform).",
+      "properties": {
+        "repo_url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Git repository URL to clone into the session."
+        },
+        "ref": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Git ref (branch, tag, or commit) to check out.",
+          "default": "main"
+        }
+      }
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "description": "Code OUT: how changed files are returned. No git write-back in v1.",
+      "properties": {
+        "mode": {
+          "type": "string",
+          "description": "zip-download (primary): zip of changed files fetched via the runtime artifact download endpoint. stdout-changed-files (fallback): base64 JSONL records over the SSE stdout channel.",
+          "enum": ["zip-download", "stdout-changed-files"],
+          "default": "zip-download"
+        }
+      }
+    }
+  }
+}

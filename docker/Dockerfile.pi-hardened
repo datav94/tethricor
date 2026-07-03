@@ -1,0 +1,32 @@
+# Hardened Pi harness image (runtime profile: node20). Also serves Feynman
+# (Feynman = Pi adapter + research profile) — same image, different runtime.profile.
+#
+# Security posture (see Dockerfile.hermes-hardened for the shared rationale):
+#   - non-root, read-only-rootfs compatible, no baked provider keys
+#   - Node for the Pi harness; a minimal Python 3 hosts the Tethricor exec shim
+#   - ENTRYPOINT is the shim → all execution forwarded to the agent-runtime; Pi's native
+#     sandbox backend is overridden to agent-runtime by the shim adapter
+FROM node:20-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    PIP_BREAK_SYSTEM_PACKAGES=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates python3 python3-pip \
+    && rm -rf /var/lib/apt/lists/*
+
+# --- harness install -------------------------------------------------------
+ARG PI_VERSION=latest
+RUN npm install -g "@pi-dev/pi@${PI_VERSION}"
+
+# --- Tethricor exec shim --------------------------------------------------------
+COPY shim/ /opt/tethricor/shim/
+RUN pip3 install /opt/tethricor/shim
+
+RUN useradd --uid 1001 --create-home --shell /usr/sbin/nologin tethricor
+USER 1001
+WORKDIR /home/tethricor
+
+ENTRYPOINT ["python3", "-m", "tethricor_runtime"]

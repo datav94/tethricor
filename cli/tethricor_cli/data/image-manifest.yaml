@@ -1,0 +1,25 @@
+# Platform-maintained hardened-image manifest.
+# Developers CANNOT override images (short of the CLI's --image escape hatch for custom
+# harness types with no entry here) -- the CLI/webhook resolve type+version to a tag here.
+# Prod entries should be digest-pinned (@sha256:...) and scan-gated before promotion.
+#
+# `ghcr.io/your-org/tethricor` below is a placeholder -- point this at whatever
+# container registry you actually publish the hardened images (docker/Dockerfile.*-hardened)
+# to, e.g. your own GHCR/ECR/GCR/ACR/Docker Hub org.
+registry: ghcr.io/your-org/tethricor
+images:
+  hermes:
+    default: ghcr.io/your-org/tethricor/hermes-hardened:0.17.0
+    "0.17.0": ghcr.io/your-org/tethricor/hermes-hardened:0.17.0
+  pi:
+    default: ghcr.io/your-org/tethricor/pi-hardened:latest
+  feynman:
+    # Feynman runs on the Pi adapter image + research profile.
+    default: ghcr.io/your-org/tethricor/pi-hardened:latest
+  openhands:
+    default: ghcr.io/your-org/tethricor/openhands-hardened:1.7.0
+    "1.7.0": ghcr.io/your-org/tethricor/openhands-hardened:1.7.0
+  goose:
+    default: ghcr.io/your-org/tethricor/goose-hardened:latest
+  opencode:
+    default: ghcr.io/your-org/tethricor/opencode-hardened:latest

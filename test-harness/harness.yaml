@@ -1,0 +1,20 @@
+apiVersion: tethricor.enterprise/v1
+kind: HarnessConfig
+harness:
+  type: hermes
+  version: 0.17.0
+model:
+  routing_profile: gpt-4o-standard
+skills: []
+mcp:
+  servers: []
+runtime:
+  profile: python312
+  timeout_seconds: 120
+  provider: remote-runtime
+source:
+  # Cloned by the mock-sandbox at session-create (code IN). The test compose seeds a
+  # local git repo at this path inside the mock-sandbox container.
+  repo_url: /samples/demo
+output:
+  mode: zip-download

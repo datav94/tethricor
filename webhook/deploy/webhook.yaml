@@ -1,0 +1,137 @@
+# Tethricor mutating admission webhook — cluster deployment.
+#
+# TLS: this uses cert-manager to issue the serving cert and to inject the caBundle
+# into the MutatingWebhookConfiguration (cert-manager.io/inject-ca-from annotation).
+# If you don't use cert-manager, provide a `tethricor-webhook-tls` secret with tls.crt/tls.key
+# and set `caBundle` on the webhook manually.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tethricor
+  labels:
+    tethricor.internal/system: "true"
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: tethricor-webhook
+  namespace: tethricor
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: tethricor-webhook-serving
+  namespace: tethricor
+spec:
+  secretName: tethricor-webhook-tls
+  dnsNames:
+    - tethricor-webhook.tethricor.svc
+    - tethricor-webhook.tethricor.svc.cluster.local
+  issuerRef:
+    name: tethricor-webhook-selfsigned
+    kind: Issuer
+---
+apiVersion: cert-manager.io/v1
+kind: Issuer
+metadata:
+  name: tethricor-webhook-selfsigned
+  namespace: tethricor
+spec:
+  selfSigned: {}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: tethricor-webhook
+  namespace: tethricor
+  labels:
+    app: tethricor-webhook
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tethricor-webhook
+  template:
+    metadata:
+      labels:
+        app: tethricor-webhook
+    spec:
+      serviceAccountName: tethricor-webhook
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+      containers:
+        - name: webhook
+          image: REPLACE_WITH_TETHRICOR_WEBHOOK_IMAGE
+          ports:
+            - containerPort: 8443
+          env:
+            - name: TETHRICOR_TLS_DIR
+              value: /tls
+          securityContext:
+            readOnlyRootFilesystem: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+      volumes:
+        - name: tls
+          secret:
+            secretName: tethricor-webhook-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: tethricor-webhook
+  namespace: tethricor
+spec:
+  selector:
+    app: tethricor-webhook
+  ports:
+    - port: 443
+      targetPort: 8443
+---
+apiVersion: admissionregistration.k8s.io/v1
+kind: MutatingWebhookConfiguration
+metadata:
+  name: tethricor-sidecar-injector
+  annotations:
+    cert-manager.io/inject-ca-from: tethricor/tethricor-webhook-serving
+webhooks:
+  - name: sidecar.tethricor.internal
+    admissionReviewVersions: ["v1"]
+    sideEffects: None
+    failurePolicy: Fail
+    # Only consider pods that opt in via the enablement label.
+    objectSelector:
+      matchLabels:
+        tethricor.internal/enabled: "true"
+    # Never mutate the system namespace hosting the webhook itself.
+    namespaceSelector:
+      matchExpressions:
+        - key: tethricor.internal/system
+          operator: DoesNotExist
+    clientConfig:
+      service:
+        name: tethricor-webhook
+        namespace: tethricor
+        path: /mutate
+        port: 443
+    rules:
+      - operations: ["CREATE"]
+        apiGroups: [""]
+        apiVersions: ["v1"]
+        resources: ["pods"]

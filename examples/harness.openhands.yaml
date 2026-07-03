@@ -1,0 +1,30 @@
+# Example HarnessConfig — OpenHands (autonomous software engineering, Python)
+apiVersion: tethricor.enterprise/v1
+kind: HarnessConfig
+
+harness:
+  type: openhands
+  version: "1.7.0"
+
+model:
+  routing_profile: claude-sonnet-standard
+
+skills:
+  - code-review
+  - github
+
+mcp:
+  servers:
+    - default-tools
+
+runtime:
+  profile: python312          # openhands → python312 (default map)
+  timeout_seconds: 1800
+  provider: remote-runtime    # explicit: no default sandbox provider (choose one)
+
+source:
+  repo_url: https://github.com/your-org/app.git
+  ref: main
+
+output:
+  mode: zip-download

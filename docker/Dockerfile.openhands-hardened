@@ -1,0 +1,28 @@
+# Hardened OpenHands harness image (runtime profile: python312).
+#
+# Security posture (see Dockerfile.hermes-hardened for the shared rationale):
+#   - non-root, read-only-rootfs compatible, no baked provider keys
+#   - ENTRYPOINT is the Tethricor exec shim → all execution forwarded to the agent-runtime
+#   - OpenHands' native runtimes (Docker/Modal/local) are overridden to "remote" by the
+#     shim adapter so it cannot spawn its own sandbox
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends git ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+ARG OPENHANDS_VERSION=1.7.0
+RUN pip install "openhands-ai==${OPENHANDS_VERSION}"
+
+COPY shim/ /opt/tethricor/shim/
+RUN pip install /opt/tethricor/shim
+
+RUN useradd --uid 1001 --create-home --shell /usr/sbin/nologin tethricor
+USER 1001
+WORKDIR /home/tethricor
+
+ENTRYPOINT ["python", "-m", "tethricor_runtime"]

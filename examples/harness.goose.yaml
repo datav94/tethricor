@@ -1,0 +1,30 @@
+# Example HarnessConfig — Goose (MCP-first general agent, Rust)
+apiVersion: tethricor.enterprise/v1
+kind: HarnessConfig
+
+harness:
+  type: goose
+  version: "1.x"
+
+model:
+  routing_profile: gpt-4o-standard
+
+skills:
+  - code-review
+  - database
+
+mcp:
+  servers:
+    - default-tools
+
+runtime:
+  profile: rust               # goose → rust (default map; use polyglot-dev if it shells out broadly)
+  timeout_seconds: 900
+  provider: remote-runtime    # explicit: no default sandbox provider (choose one)
+
+source:
+  repo_url: https://github.com/your-org/app.git
+  ref: main
+
+output:
+  mode: zip-download

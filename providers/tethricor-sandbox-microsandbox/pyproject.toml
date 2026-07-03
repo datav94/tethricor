@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "tethricor-sandbox-microsandbox"
+version = "0.1.0"
+description = "microsandbox SandboxProvider plugin for the Tethricor framework (libkrun/KVM microVM isolation, beta)."
+license = { text = "Apache-2.0" }
+classifiers = ["License :: OSI Approved :: Apache Software License"]
+requires-python = ">=3.10"
+dependencies = [
+    "tethricor>=0.1",
+    "httpx>=0.27",
+]
+
+# Discovered by tethricor.discovery at `import tethricor`; adds `microsandbox` to the registry.
+[project.entry-points."tethricor.sandboxes"]
+microsandbox = "tethricor_sandbox_microsandbox:make_provider"
+
+[tool.setuptools]
+packages = ["tethricor_sandbox_microsandbox"]

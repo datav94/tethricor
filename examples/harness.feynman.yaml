@@ -1,0 +1,30 @@
+# Example HarnessConfig — Feynman (research agent; runs on the Pi adapter + research profile)
+apiVersion: tethricor.enterprise/v1
+kind: HarnessConfig
+
+harness:
+  type: feynman
+  version: latest
+
+model:
+  routing_profile: gpt-4o-standard
+
+skills:
+  - literature-review
+  - paper-audit
+
+mcp:
+  servers:
+    - default-tools
+
+runtime:
+  profile: node20             # feynman → Pi adapter → node20 (default map)
+  timeout_seconds: 900
+  provider: remote-runtime    # explicit: no default sandbox provider (choose one)
+
+source:
+  repo_url: https://github.com/your-org/research-notes.git
+  ref: main
+
+output:
+  mode: zip-download
